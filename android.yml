@@ -1,0 +1,53 @@
+name: Build ProCam APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Locate Android project
+        id: locate
+        run: |
+          APP_GRADLE=$(find . -path ./.git -prune -o -path '*/app/build.gradle.kts' -print | head -n 1)
+          if [ -z "$APP_GRADLE" ]; then
+            echo "::error::No app/build.gradle.kts found. Repo contents:"
+            find . -path ./.git -prune -o -type f -print | head -50
+            exit 1
+          fi
+          DIR=$(dirname "$(dirname "$APP_GRADLE")")
+          echo "Android project directory: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build debug APK
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProCam-debug-apk
+          path: "**/app/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
+          retention-days: 14
